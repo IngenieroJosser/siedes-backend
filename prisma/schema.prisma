@@ -1,15 +1,299 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
-  // output   = "../generated/prisma"
+    // output   = "../generated/prisma"
 }
 
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+}
+
+model Usuario {
+  id                        String   @id @default(cuid())
+  nombre                    String
+  apellido                  String
+  email                     String   @unique
+  telefono                  String?
+  password                  String
+  rol                       Rol
+  creadoEn                  DateTime @default(now())
+  actualizadoEn             DateTime @updatedAt
+
+  // Relaciones
+  estudiante                Estudiante?
+  solicitudes               SolicitudAyuda[]
+}
+
+model Estudiante {
+  id                        String   @id @default(cuid())
+  usuarioId                 String   @unique
+  edad                      Int
+  genero                    String
+  etnia                     Etnia   @default(NINGUNA)
+  grado                     String
+  riesgoDesercion           Float   @default(0.0) // Valor predictivo (0-1)
+
+  institucionId             String
+  creadoEn                  DateTime @default(now())
+  actualizadoEn             DateTime @updatedAt
+
+  // Relaciones           
+  usuario                   Usuario  @relation(fields: [usuarioId], references: [id])
+  institucion               Institucion @relation(fields: [institucionId], references: [id])
+  registros                 RegistroAcademico[]
+  alertas                   AlertaDesercion[]
+  contexto                  ContextoEstudiante?
+  intervenciones            Intervencion[]
+  asignacionesBeneficios    AsignacionBeneficio[]  // Relación añadida
+}
+
+model Institucion {
+  id                        String   @id @default(cuid())
+  nombre                    String
+  direccion                 String
+  ciudad                    String
+  departamento              String
+  tipo                      TipoInstitucion @default(UNIVERSIDAD)  // Pública, Privada, etc.
+  codigoDANE                String?  // Código único del Ministerio de Educación
+  creadoEn                  DateTime @default(now())
+
+  // Relaciones
+  estudiantes               Estudiante[]
+}
+
+model RegistroAcademico {
+  id                        String   @id @default(cuid())
+  estudianteId              String
+  periodo                   String   // Ejemplo: "2025-I"
+  promedio                  Float
+  inasistencias             Int
+  observaciones             String?
+  materiasAprobadas         Int
+  materiasReprobadas        Int
+  comportamiento            Int?     // Escala 1-10
+
+  creadoEn                  DateTime @default(now())
+  estudiante                Estudiante @relation(fields: [estudianteId], references: [id])
+}
+
+model AlertaDesercion {
+  id                        String   @id @default(cuid())
+  estudianteId              String
+  nivelRiesgo               NivelRiesgo   // bajo, medio, alto
+  descripcion               String
+  factores                  String[]      // Factores que contribuyen al riesgo
+  creadaEn                  DateTime @default(now())
+  revisada                  Boolean @default(false)
+  fechaRevision             DateTime?
+
+  estudiante                Estudiante @relation(fields: [estudianteId], references: [id])
+}
+
+model SolicitudAyuda {
+  id                        String   @id @default(cuid())
+  usuarioId                 String
+  tipo                      TipoSolicitud   // psicológica, económica, académica
+  mensaje                   String
+  estado                    EstadoSolicitud @default(PENDIENTE)
+  creadoEn                  DateTime @default(now())
+  prioridad                 PrioridadSolicitud @default(MEDIA)
+
+  usuario                   Usuario @relation(fields: [usuarioId], references: [id])
+}
+
+model Beneficio {
+  id                        String   @id @default(cuid())
+  nombre                    String
+  descripcion               String
+  tipo                      TipoBeneficio   // beca, alimentación, transporte, etc.
+  criteriosElegibilidad     String[]        // Criterios para acceder al beneficio
+  activo                    Boolean @default(true)
+  creadoEn                  DateTime @default(now())
+  
+  // Relaciones
+  asignaciones              AsignacionBeneficio[]  // Relación inversa
+}
+
+model AsignacionBeneficio {
+  id                        String   @id @default(cuid())
+  estudianteId              String
+  beneficioId               String
+  fechaAsignacion           DateTime @default(now())
+  fechaVencimiento          DateTime?
+  estado                    EstadoAsignacion @default(ACTIVA)
+  comentarios               String?
+
+  estudiante                Estudiante @relation(fields: [estudianteId], references: [id])
+  beneficio                 Beneficio @relation(fields: [beneficioId], references: [id])
+}
+
+model ContextoEstudiante {
+  id                        String   @id @default(cuid())
+  estudianteId              String   @unique
+  distanciaEscuela          Float    // km
+  tiempoDesplazamiento      Int      // minutos
+  trabaja                   Boolean  @default(false)
+  horasTrabajo              Int?
+  ingresosFamiliares        Int?     // Rango de ingresos mensuales
+  personasHogar             Int
+  apoyoFamiliar             Boolean  @default(true)
+  accesoInternet            Boolean  @default(false)
+  dispositivoElectronico    Boolean  @default(false)
+  participacionComunitaria  Boolean  @default(false)
+  conocimientosAncestrales  Boolean  @default(false)
+  situacionesEspeciales     String?  // Situaciones de vulnerabilidad específicas
+  necesidadesEspeciales     String?  // Necesidades educativas especiales
+  
+  estudiante                Estudiante @relation(fields: [estudianteId], references: [id])
+}
+
+model Intervencion {
+  id                        String   @id @default(cuid())
+  estudianteId              String
+  tipo                      TipoIntervencion
+  descripcion               String
+  fechaInicio               DateTime
+  fechaFin                  DateTime?
+  estado                    EstadoIntervencion @default(ACTIVA)
+  efectividad               Float?   // 0-1, evaluada posteriormente
+  recursosUtilizados        String[]
+  participantes             String[] // Quiénes participaron (docentes, familia, etc.)
+  observaciones             String?
+  creadoEn                  DateTime @default(now())
+  
+  estudiante                Estudiante @relation(fields: [estudianteId], references: [id])
+}
+
+model IndicadorEtnico {
+  id                        String   @id @default(cuid())
+  nombre                    String
+  descripcion               String
+  peso                      Float    // 0-1, importancia en el cálculo de riesgo
+  activo                    Boolean @default(true)
+  categoria                 CategoriaIndicador
+  creadoEn                  DateTime @default(now())
+}
+
+model FactorRiesgo {
+  id                        String   @id @default(cuid())
+  nombre                    String
+  descripcion               String
+  categoria                 CategoriaFactor
+  peso                      Float    // 0-1, importancia en el cálculo de riesgo
+  activo                    Boolean @default(true)
+  creadoEn                  DateTime @default(now())
+}
+
+// Enums extendidos
+enum Rol {
+  ADMIN
+  DOCENTE
+  PADRE
+  ESTUDIANTE
+  COORDINADOR
+  LIDER_COMUNITARIO
+}
+
+enum EstadoSolicitud {
+  PENDIENTE
+  EN_PROCESO
+  RESUELTA
+  RECHAZADA
+}
+
+enum Etnia {
+  AFRODESCENDIENTE   // Afrocolombiano(a)
+  INDIGENA           // Pueblos indígenas
+  ROM                // Pueblo gitano (ROM)
+  RAIZAL             // Raizal del Archipiélago de San Andrés
+  PALENQUERO         // San Basilio de Palenque
+  NINGUNA            // No se autorreconoce en grupo étnico
+}
+
+// Nuevos enums
+enum NivelRiesgo {
+  BAJO
+  MEDIO
+  ALTO
+  CRITICO
+}
+
+enum TipoSolicitud {
+  PSICOLOGICA
+  ECONOMICA
+  ACADEMICA
+  ALIMENTARIA
+  TRANSPORTE
+  OTRA
+}
+
+enum PrioridadSolicitud {
+  BAJA
+  MEDIA
+  ALTA
+  URGENTE
+}
+
+enum TipoBeneficio {
+  BECA
+  ALIMENTACION
+  TRANSPORTE
+  UNIFORME
+  UTILES
+  PSICOLOGICA
+  OTRO
+}
+
+enum EstadoAsignacion {
+  ACTIVA
+  SUSPENDIDA
+  FINALIZADA
+}
+
+enum TipoIntervencion {
+  ACADEMICA
+  PSICOLOGICA
+  ECONOMICA
+  FAMILIAR
+  COMUNITARIA
+  CULTURAL
+  TUTORIA
+  OTRA
+}
+
+enum EstadoIntervencion {
+  ACTIVA
+  COMPLETADA
+  SUSPENDIDA
+  CANCELADA
+}
+
+enum CategoriaIndicador {
+  ACADEMICA
+  SOCIOECONOMICA
+  CULTURAL
+  CONTEXTUAL
+  INSTITUCIONAL
+}
+
+enum CategoriaFactor {
+  ACADEMICO
+  ECONOMICO
+  FAMILIAR
+  PERSONAL
+  INSTITUCIONAL
+  COMUNITARIO
+  CULTURAL
+}
+
+enum TipoInstitucion {
+  PREESCOLAR
+  PRIMARIA
+  SECUNDARIA
+  MEDIA
+  TECNICA
+  TECNOLOGICA
+  UNIVERSIDAD
+  INSTITUTO
+  OTRO
 }
