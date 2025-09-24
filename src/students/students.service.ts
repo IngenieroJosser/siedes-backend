@@ -6,6 +6,7 @@ import { CreateContextoEstudianteDto } from './dto/create-contexto-estudiante.dt
 import { UserService } from 'src/user/user.service';
 import * as bcrypt from 'bcrypt';
 import { Rol, Etnia } from '@prisma/client';
+import { CreateCompleteStudentDto } from './dto/create-complete-student.dto';
 
 @Injectable()
 export class StudentsService {
@@ -60,124 +61,95 @@ export class StudentsService {
     return createStudent;
   }
 
-  async createCompleteStudent(studentData: any) {
-    const {
-      // Datos de usuario
-      nombre,
-      apellido,
-      email,
-      telefono,
-      password,
-      
-      // Datos de estudiante
-      edad,
-      genero,
-      etnia,
-      grado,
-      institucionId,
-      
-      // Contexto del estudiante
-      distanciaEscuela,
-      tiempoDesplazamiento,
-      trabaja,
-      horasTrabajo,
-      ingresosFamiliares,
-      personasHogar,
-      apoyoFamiliar,
-      accesoInternet,
-      dispositivoElectronico,
-      participacionComunitaria,
-      conocimientosAncestrales,
-      situacionesEspeciales,
-      necesidadesEspeciales
-    } = studentData;
-
+  async createCompleteStudent(createCompleteStudentDto: CreateCompleteStudentDto) {
+    const { usuario, estudiante, contexto } = createCompleteStudentDto;
+  
     // Verificar si el email ya existe
     const existingUser = await this.prisma.usuario.findUnique({
-      where: { email },
+      where: { email: usuario.email },
     });
-
+  
     if (existingUser) {
       throw new ConflictException('El email ya está registrado');
     }
-
+  
     // Verificar si la institución existe
     const validateInstitution = await this.prisma.institucion.findUnique({
-      where: { id: institucionId },
+      where: { id: estudiante.institucionId },
     });
-
+  
     if (!validateInstitution) {
       throw new NotFoundException('La institución no existe');
     }
-
+  
     // Hash de la contraseña
-    const hashedPassword = await bcrypt.hash(password, 10);
-
+    const hashedPassword = await bcrypt.hash(usuario.password, 10);
+  
     return this.prisma.$transaction(async (prisma) => {
       // Crear usuario
       const newUser = await prisma.usuario.create({
         data: {
-          nombre,
-          apellido,
-          email,
-          telefono,
+          nombre: usuario.nombre,
+          apellido: usuario.apellido,
+          email: usuario.email,
+          telefono: usuario.telefono,
           password: hashedPassword,
           rol: Rol.ESTUDIANTE,
         },
       });
-
+  
       // Crear estudiante
       const newStudent = await prisma.estudiante.create({
         data: {
           usuarioId: newUser.id,
-          institucionId,
-          edad: parseInt(edad),
-          genero,
-          etnia: etnia as Etnia,
-          grado,
+          institucionId: estudiante.institucionId,
+          edad: estudiante.edad,
+          genero: estudiante.genero,
+          etnia: estudiante.etnia,
+          grado: estudiante.grado,
           riesgoDesercion: 0.0, // Valor inicial, se actualizará después
         },
       });
-
+  
       // Crear contexto del estudiante
       await prisma.contextoEstudiante.create({
         data: {
           estudianteId: newStudent.id,
-          distanciaEscuela: parseFloat(distanciaEscuela),
-          tiempoDesplazamiento: parseInt(tiempoDesplazamiento),
-          trabaja,
-          horasTrabajo: horasTrabajo ? parseInt(horasTrabajo) : 0,
-          ingresosFamiliares: ingresosFamiliares ? parseInt(ingresosFamiliares) : 0,
-          personasHogar: parseInt(personasHogar),
-          apoyoFamiliar,
-          accesoInternet,
-          dispositivoElectronico,
-          participacionComunitaria,
-          conocimientosAncestrales,
-          situacionesEspeciales: situacionesEspeciales || '',
-          necesidadesEspeciales: necesidadesEspeciales || '',
+          distanciaEscuela: contexto.distanciaEscuela,
+          tiempoDesplazamiento: contexto.tiempoDesplazamiento,
+          trabaja: contexto.trabaja,
+          horasTrabajo: contexto.horasTrabajo || 0,
+          ingresosFamiliares: contexto.ingresosFamiliares || 0,
+          personasHogar: contexto.personasHogar,
+          apoyoFamiliar: contexto.apoyoFamiliar,
+          accesoInternet: contexto.accesoInternet,
+          dispositivoElectronico: contexto.dispositivoElectronico,
+          participacionComunitaria: contexto.participacionComunitaria,
+          conocimientosAncestrales: contexto.conocimientosAncestrales,
+          situacionesEspeciales: contexto.situacionesEspeciales || '',
+          necesidadesEspeciales: contexto.necesidadesEspeciales || '',
         },
       });
-
-      // Calcular riesgo de deserción inicial (puedes implementar tu algoritmo aquí)
+  
+      // Calcular riesgo de deserción inicial
       const riesgoDesercion = await this.calcularRiesgoDesercionInicial({
-        distanciaEscuela: parseFloat(distanciaEscuela),
-        tiempoDesplazamiento: parseInt(tiempoDesplazamiento),
-        trabaja,
-        horasTrabajo: horasTrabajo ? parseInt(horasTrabajo) : 0,
-        ingresosFamiliares: ingresosFamiliares ? parseInt(ingresosFamiliares) : 0,
-        personasHogar: parseInt(personasHogar),
-        apoyoFamiliar,
-        accesoInternet,
-        dispositivoElectronico,
+        distanciaEscuela: contexto.distanciaEscuela,
+        tiempoDesplazamiento: contexto.tiempoDesplazamiento,
+        trabaja: contexto.trabaja,
+        horasTrabajo: contexto.horasTrabajo || 0,
+        ingresosFamiliares: contexto.ingresosFamiliares || 0,
+        personasHogar: contexto.personasHogar,
+        apoyoFamiliar: contexto.apoyoFamiliar,
+        accesoInternet: contexto.accesoInternet,
+        dispositivoElectronico: contexto.dispositivoElectronico,
       });
-
+  
       // Actualizar estudiante con el riesgo de deserción calculado
       await prisma.estudiante.update({
         where: { id: newStudent.id },
         data: { riesgoDesercion },
       });
-
+  
       return {
         user: newUser,
         student: newStudent,
