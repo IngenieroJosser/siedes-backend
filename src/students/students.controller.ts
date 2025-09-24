@@ -10,6 +10,7 @@ import {
   ApiParam,
   ApiQuery,
 } from '@nestjs/swagger';
+import { CreateCompleteStudentDto } from './dto/create-complete-student.dto';
 
 @ApiTags('Gestión Estudiantil')
 @ApiBearerAuth()
@@ -24,6 +25,15 @@ export class StudentsController {
   @ApiResponse({ status: 409, description: 'El usuario ya tiene un estudiante asociado' })
   createStudent(@Body() dtoStudent: CreateStudentDto) {
     return this.studentService.createStudent(dtoStudent);
+  }
+
+  @Post('/student-record')
+  @ApiOperation({ summary: 'Registro de estudiante en el dashboard',description: 'Crea un nuevo registro de estudiante en el sistema SIEDES' })
+  @ApiResponse({ status: 201, description: 'Estudiante creado exitosamente',})
+  @ApiResponse({ status: 404, description: 'Usuario o institución no encontrada' })
+  @ApiResponse({ status: 409, description: 'El usuario ya tiene un estudiante asociado' })
+  createCompleteStudent(@Body() dtoStudentComplete: CreateCompleteStudentDto) {
+    return this.studentService.createCompleteStudent(dtoStudentComplete);
   }
   
   @Get()
