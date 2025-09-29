@@ -49,20 +49,24 @@ model Estudiante {
   contexto                  ContextoEstudiante?
   intervenciones            Intervencion[]
   asignacionesBeneficios    AsignacionBeneficio[]  // Relación añadida
+  solicitudesRapidas        SolicitudAyudaRapida[]
+
 }
 
 model Institucion {
   id                        String   @id @default(cuid())
   nombre                    String
   direccion                 String
-  ciudad                    String
-  departamento              String
+  ciudad                    CiudadesUIUB @default(OTRA_CIUDAD)
+  departamento              Departamento @default(OTRO)
   tipo                      TipoInstitucion @default(UNIVERSIDAD)  // Pública, Privada, etc.
   codigoDANE                String?  // Código único del Ministerio de Educación
   creadoEn                  DateTime @default(now())
+  deletedAt                 DateTime?
 
   // Relaciones
   estudiantes               Estudiante[]
+  solicitudesRapidas        SolicitudAyudaRapida[]
 }
 
 model RegistroAcademico {
@@ -180,12 +184,30 @@ model IndicadorEtnico {
 
 model FactorRiesgo {
   id                        String   @id @default(cuid())
+  institucionId             String
   nombre                    String
   descripcion               String
   categoria                 CategoriaFactor
   peso                      Float    // 0-1, importancia en el cálculo de riesgo
   activo                    Boolean @default(true)
   creadoEn                  DateTime @default(now())
+}
+
+model SolicitudAyudaRapida {
+  id                        String @id @default(cuid())
+  tipoSolicitante           TipoSolicitante
+  nombre                    String
+  email                     String
+  telefono                  String
+
+  institucionId             String
+  institucion               Institucion @relation(fields: [institucionId], references: [id])
+
+  estudianteId              String
+  estudiante                Estudiante @relation(fields: [estudianteId], references: [id])
+
+  motivo                    MotivoSolicitud
+  descripcion               String
 }
 
 // Enums extendidos
@@ -300,4 +322,89 @@ enum TipoInstitucion {
   UNIVERSIDAD
   INSTITUTO
   OTRO
+}
+
+enum Departamento {
+  AMAZONAS
+  ANTIOQUIA
+  ARAUCA
+  ATLANTICO
+  BOLIVAR
+  BOYACA
+  CALDAS
+  CAQUETA
+  CASANARE
+  CAUCA
+  CESAR
+  CHOCÓ
+  CORDOBA
+  CUNDINAMARCA
+  GUAINIA
+  GUAJIRA
+  GUAVIARE
+  HUILA
+  MAGDALENA
+  META
+  NARIÑO
+  NORTE_DE_SANTANDER
+  PUTUMAYO
+  QUINDIO
+  RISARALDA
+  SAN_ANDRES
+  SANTANDER
+  SUCRE
+  TOLIMA
+  VALLE_DEL_CAUCA
+  VAUPES
+  VICHADA
+  OTRO
+}
+
+enum CiudadesUIUB {
+  ACANDI
+  ALTO_BAUDO
+  ATRATO
+  BAGADO
+  BAHIA_SOLANO
+  BAJO_BAUDO
+  BOJAYA
+  CANTON_DE_SAN_PABLO
+  CARMEN_DEL_DARIEN
+  CERTEGUI
+  CONDOTO
+  EL_CARMEN_DE_ATRATO
+  ISTMINA
+  JURADO
+  LLORO
+  MEDIO_ATRATO
+  MEDIO_BAUDO
+  MEDIO_SAN_JUAN
+  NOVITA
+  NUQUI
+  QUIBDO
+  RIO_IRE
+  RIO_QUITO
+  RIODOCES
+  SAN_JOSE_DEL_PALMAR
+  SIPI
+  TADO
+  UNGUIA
+  UNION_PANAMERICANA
+  OTRA_CIUDAD
+}
+
+enum MotivoSolicitud {
+  BAJO_RENDIMIENTO     // Bajo rendimiento académico
+  INASISTENCIA         // Inasistencia frecuente
+  PROBLEMAS_FAMILIARES // Problemas familiares
+  PROBLEMAS_ECONOMICOS // Problemas económicos
+  ACOSO_ESCOLAR        // Acoso escolar
+  OTROS                // Otros motivos
+}
+
+enum TipoSolicitante {
+  FAMILIAR
+  ESTUDIANTE
+  DOCENTE
+  INSTITUCION
 }
