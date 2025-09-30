@@ -10,40 +10,40 @@ import { Prisma } from '@prisma/client';
 
 @Injectable()
 export class HelpService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService) { }
 
-  async quickHelpRequest(dto: AskForHelp) {
+  async quickHelpRequest(dtoQuickHelpRequest: AskForHelp) {
     try {
       const institucion = await this.prisma.institucion.findUnique({
-        where: { id: dto.institucionId },
+        where: { id: dtoQuickHelpRequest.institucionId },
       });
       if (!institucion) {
         throw new NotFoundException(
-          `No se encontró la institución con ID ${dto.institucionId}`,
+          `No se encontró la institución con ID ${dtoQuickHelpRequest.institucionId}`,
         );
       }
 
       const estudiante = await this.prisma.estudiante.findUnique({
-        where: { id: dto.estudianteId },
+        where: { id: dtoQuickHelpRequest.estudianteId },
       });
       if (!estudiante) {
         throw new NotFoundException(
-          `No se encontró el estudiante con ID ${dto.estudianteId}`,
+          `No se encontró el estudiante con ID ${dtoQuickHelpRequest.estudianteId}`,
         );
       }
 
       const createquickHelpRequest = await this.prisma.solicitudAyudaRapida.create({
-          data: {
-            tipoSolicitante: dto.tipoSolicitante,
-            nombre: dto.nombre,
-            telefono: dto.telefono,
-            email: dto.email,
-            institucion: { connect: { id: dto.institucionId } },
-            estudiante: { connect: { id: dto.estudianteId } },
-            motivo: dto.motivoSolicitud,
-            descripcion: dto.descripcion,
-          },
-        });
+        data: {
+          tipoSolicitante: dtoQuickHelpRequest.tipoSolicitante,
+          nombre: dtoQuickHelpRequest.nombre,
+          telefono: dtoQuickHelpRequest.telefono,
+          email: dtoQuickHelpRequest.email,
+          institucion: { connect: { id: dtoQuickHelpRequest.institucionId } },
+          estudiante: { connect: { id: dtoQuickHelpRequest.estudianteId } },
+          motivo: dtoQuickHelpRequest.motivoSolicitud,
+          descripcion: dtoQuickHelpRequest.descripcion,
+        },
+      });
 
       return createquickHelpRequest;
     } catch (error) {
@@ -68,5 +68,87 @@ export class HelpService {
         'Ocurrió un error al procesar la solicitud',
       );
     }
+  }
+
+  async getAllquickHelpRequest() {
+    const allQuickHelpRequest = await this.prisma.solicitudAyudaRapida.findMany();
+    return allQuickHelpRequest;
+  }
+
+  async getInstitutions() {
+    return this.prisma.institucion.findMany({
+      select: {
+        id: true,
+        nombre: true,
+        // otros campos que quieras mostrar
+      },
+      orderBy: {
+        nombre: 'asc'
+      }
+    });
+  }
+
+  async getStudents() {
+    return this.prisma.estudiante.findMany({
+      where: {
+        activo: true
+      },
+      include: {
+        usuario: {
+          select: {
+            nombre: true,
+            apellido: true,
+            email: true,
+            identificacion: true,
+          },
+        },
+        institucion: {
+          select: {
+            id: true,
+            nombre: true,
+          },
+        },
+      },
+      orderBy: {
+        usuario: {
+          nombre: 'asc',
+        },
+      },
+    }).then(estudiantes =>
+      estudiantes.map(estudiante => ({
+        id: estudiante.id,
+        nombre: estudiante.usuario.nombre,
+        apellido: estudiante.usuario.apellido,
+        email: estudiante.usuario.email,
+        grado: estudiante.grado,
+        institucionId: estudiante.institucionId
+      }))
+    );
+  }
+
+  async getStudentsByInstitution(institutionId: string) {
+    return this.prisma.estudiante.findMany({
+      where: { institucionId: institutionId },
+      include: {
+        usuario: {
+          select: {
+            nombre: true,
+            apellido: true,
+          },
+        },
+      },
+      orderBy: {
+        usuario: {
+          nombre: 'asc',
+        },
+      },
+    }).then(estudiantes =>
+      estudiantes.map(estudiante => ({
+        id: estudiante.id,
+        nombre: estudiante.usuario.nombre,
+        apellido: estudiante.usuario.apellido,
+        grado: estudiante.grado
+      }))
+    );
   }
 }
