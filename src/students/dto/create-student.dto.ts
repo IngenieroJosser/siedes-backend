@@ -1,5 +1,5 @@
 import { Dto } from "src/lib/dto/dto";
-import { IsString, IsNotEmpty, IsEnum, IsInt, IsNumber, Min, Max } from "class-validator";
+import { IsString, IsNotEmpty, IsEnum, IsInt, IsNumber, Min, Max, IsOptional } from "class-validator";
 import { ApiProperty } from "@nestjs/swagger";
 import { Etnia } from "@prisma/client";
 
@@ -11,7 +11,7 @@ export class CreateStudentDto extends Dto<CreateStudentDto> {
   @IsString()
   @IsNotEmpty()
   usuarioId: string;
-
+  
   @ApiProperty({
     description: "Edad del estudiante",
     example: 16,
@@ -46,11 +46,13 @@ export class CreateStudentDto extends Dto<CreateStudentDto> {
   @ApiProperty({
     description: "Probabilidad de deserción (valor entre 0 y 1)",
     example: 0.35,
+    required: false
   })
   @IsNumber()
   @Min(0)
   @Max(1)
-  riesgoDesercion: number;
+  @IsOptional()
+  riesgoDesercion?: number;
 
   @ApiProperty({
     description: "ID de la institución a la que pertenece el estudiante",
