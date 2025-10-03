@@ -1,4 +1,12 @@
-import { Injectable, NotFoundException, ConflictException, Inject, forwardRef } from '@nestjs/common';
+import { 
+  Injectable, 
+  NotFoundException, 
+  ConflictException, 
+  Inject, 
+  forwardRef, 
+  BadRequestException,
+  InternalServerErrorException 
+} from '@nestjs/common';
 import { PrismaService } from 'prisma/prisma.service';
 import { CreateStudentDto } from './dto/create-student.dto';
 import { UpdateStudent } from './dto/update-student.dto';
@@ -17,26 +25,6 @@ export class StudentsService {
   ) {}
 
   async createStudent(dtoStudent: CreateStudentDto) {
-    const validateUser = await this.prisma.usuario.findUnique({
-      where: { id: dtoStudent.usuarioId },
-    });
-  
-    if (!validateUser) {
-      throw new NotFoundException('El usuario no existe');
-    }
-
-    // Verificar si el usuario ya tiene un estudiante asociado
-    const existingStudent = await this.prisma.estudiante.findFirst({
-      where: { 
-        usuarioId: dtoStudent.usuarioId,
-        activo: true 
-      },
-    });
-
-    if (existingStudent) {
-      throw new ConflictException('Este usuario ya tiene un estudiante asociado');
-    }
-
     // Verificar si la institución existe
     const validateInstitution = await this.prisma.institucion.findUnique({
       where: { id: dtoStudent.institucionId },
@@ -54,7 +42,7 @@ export class StudentsService {
         genero: dtoStudent.genero,
         etnia: dtoStudent.etnia,
         grado: dtoStudent.grado,
-        riesgoDesercion: dtoStudent.riesgoDesercion,
+        riesgoDesercion: dtoStudent.riesgoDesercion || 0.0,
       },
     });
   
@@ -62,7 +50,25 @@ export class StudentsService {
   }
 
   async createCompleteStudent(createCompleteStudentDto: CreateCompleteStudentDto) {
+    // Validar que los datos necesarios estén presentes
+    if (!createCompleteStudentDto.usuario || !createCompleteStudentDto.estudiante || !createCompleteStudentDto.contexto) {
+      throw new BadRequestException('Datos incompletos. Se requieren usuario, estudiante y contexto.');
+    }
+
     const { usuario, estudiante, contexto } = createCompleteStudentDto;
+  
+    // Validaciones adicionales de campos requeridos
+    if (!usuario.email || !usuario.password || !usuario.nombre || !usuario.apellido) {
+      throw new BadRequestException('Faltan campos requeridos en la información del usuario');
+    }
+
+    if (!estudiante.edad || !estudiante.genero || !estudiante.etnia || !estudiante.grado || !estudiante.institucionId) {
+      throw new BadRequestException('Faltan campos requeridos en la información del estudiante');
+    }
+
+    if (!contexto.distanciaEscuela || !contexto.tiempoDesplazamiento || !contexto.personasHogar) {
+      throw new BadRequestException('Faltan campos requeridos en el contexto del estudiante');
+    }
   
     // Verificar si el email ya existe
     const existingUser = await this.prisma.usuario.findUnique({
@@ -85,77 +91,125 @@ export class StudentsService {
     // Hash de la contraseña
     const hashedPassword = await bcrypt.hash(usuario.password, 10);
   
-    return this.prisma.$transaction(async (prisma) => {
-      // Crear usuario
-      const newUser = await prisma.usuario.create({
-        data: {
-          nombre: usuario.nombre,
-          apellido: usuario.apellido,
-          email: usuario.email,
-          telefono: usuario.telefono,
-          password: hashedPassword,
-          rol: Rol.ESTUDIANTE,
-        },
-      });
+    try {
+      return await this.prisma.$transaction(async (prisma) => {
+        // Crear usuario
+        const newUser = await prisma.usuario.create({
+          data: {
+            nombre: usuario.nombre,
+            apellido: usuario.apellido,
+            email: usuario.email,
+            telefono: usuario.telefono,
+            password: hashedPassword,
+            rol: Rol.ESTUDIANTE,
+          },
+          select: {
+            id: true,
+            nombre: true,
+            apellido: true,
+            email: true,
+            telefono: true,
+            rol: true,
+            creadoEn: true,
+          }
+        });
   
-      // Crear estudiante
-      const newStudent = await prisma.estudiante.create({
-        data: {
-          usuarioId: newUser.id,
-          institucionId: estudiante.institucionId,
-          edad: estudiante.edad,
-          genero: estudiante.genero,
-          etnia: estudiante.etnia,
-          grado: estudiante.grado,
-          riesgoDesercion: 0.0, // Valor inicial, se actualizará después
-        },
-      });
+        // Crear estudiante
+        const newStudent = await prisma.estudiante.create({
+          data: {
+            usuarioId: newUser.id,
+            institucionId: estudiante.institucionId,
+            edad: estudiante.edad,
+            genero: estudiante.genero,
+            etnia: estudiante.etnia,
+            grado: estudiante.grado,
+            riesgoDesercion: 0.0, // Valor inicial, se actualizará después
+          },
+          include: {
+            institucion: {
+              select: {
+                id: true,
+                nombre: true,
+                ciudad: true,
+              }
+            }
+          }
+        });
   
-      // Crear contexto del estudiante
-      await prisma.contextoEstudiante.create({
-        data: {
-          estudianteId: newStudent.id,
-          distanciaEscuela: contexto.distanciaEscuela,
-          tiempoDesplazamiento: contexto.tiempoDesplazamiento,
-          trabaja: contexto.trabaja,
-          horasTrabajo: contexto.horasTrabajo || 0,
-          ingresosFamiliares: contexto.ingresosFamiliares || 0,
-          personasHogar: contexto.personasHogar,
-          apoyoFamiliar: contexto.apoyoFamiliar,
-          accesoInternet: contexto.accesoInternet,
-          dispositivoElectronico: contexto.dispositivoElectronico,
-          participacionComunitaria: contexto.participacionComunitaria,
-          conocimientosAncestrales: contexto.conocimientosAncestrales,
-          situacionesEspeciales: contexto.situacionesEspeciales || '',
-          necesidadesEspeciales: contexto.necesidadesEspeciales || '',
-        },
-      });
+        // Crear contexto del estudiante
+        const newContext = await prisma.contextoEstudiante.create({
+          data: {
+            estudianteId: newStudent.id,
+            distanciaEscuela: contexto.distanciaEscuela,
+            tiempoDesplazamiento: contexto.tiempoDesplazamiento,
+            trabaja: contexto.trabaja,
+            horasTrabajo: contexto.horasTrabajo,
+            ingresosFamiliares: contexto.ingresosFamiliares,
+            personasHogar: contexto.personasHogar,
+            apoyoFamiliar: contexto.apoyoFamiliar,
+            accesoInternet: contexto.accesoInternet,
+            dispositivoElectronico: contexto.dispositivoElectronico,
+            participacionComunitaria: contexto.participacionComunitaria,
+            conocimientosAncestrales: contexto.conocimientosAncestrales,
+            situacionesEspeciales: contexto.situacionesEspeciales,
+            necesidadesEspeciales: contexto.necesidadesEspeciales,
+          },
+        });
   
-      // Calcular riesgo de deserción inicial
-      const riesgoDesercion = await this.calcularRiesgoDesercionInicial({
-        distanciaEscuela: contexto.distanciaEscuela,
-        tiempoDesplazamiento: contexto.tiempoDesplazamiento,
-        trabaja: contexto.trabaja,
-        horasTrabajo: contexto.horasTrabajo || 0,
-        ingresosFamiliares: contexto.ingresosFamiliares || 0,
-        personasHogar: contexto.personasHogar,
-        apoyoFamiliar: contexto.apoyoFamiliar,
-        accesoInternet: contexto.accesoInternet,
-        dispositivoElectronico: contexto.dispositivoElectronico,
-      });
+        // Calcular riesgo de deserción inicial
+        const riesgoDesercion = await this.calcularRiesgoDesercionInicial(contexto);
   
-      // Actualizar estudiante con el riesgo de deserción calculado
-      await prisma.estudiante.update({
-        where: { id: newStudent.id },
-        data: { riesgoDesercion },
-      });
+        // Actualizar estudiante con el riesgo de deserción calculado
+        const updatedStudent = await prisma.estudiante.update({
+          where: { id: newStudent.id },
+          data: { riesgoDesercion },
+          include: {
+            institucion: {
+              select: {
+                id: true,
+                nombre: true,
+                ciudad: true,
+              }
+            }
+          }
+        });
   
-      return {
-        user: newUser,
-        student: newStudent,
-        riesgoDesercion,
-      };
-    });
+        // Crear registro académico inicial vacío
+        await prisma.registroAcademico.create({
+          data: {
+            estudianteId: newStudent.id,
+            periodo: this.getCurrentPeriod(),
+            promedio: 0,
+            inasistencias: 0,
+            materiasAprobadas: 0,
+            materiasReprobadas: 0,
+            comportamiento: 5, // Valor neutro
+            observaciones: 'Registro académico inicial creado automáticamente',
+          },
+        });
+  
+        return {
+          message: 'Estudiante creado exitosamente',
+          data: {
+            user: newUser,
+            student: updatedStudent,
+            contexto: newContext,
+            riesgoDesercion,
+          },
+          success: true,
+        };
+      });
+    } catch (error) {
+      console.error('Error en transacción de creación de estudiante:', error);
+      
+      if (error instanceof ConflictException || 
+          error instanceof NotFoundException || 
+          error instanceof BadRequestException) {
+        throw error;
+      }
+      
+      throw new InternalServerErrorException('Error interno del servidor al crear el estudiante');
+    }
   }
 
   private async calcularRiesgoDesercionInicial(contexto: any): Promise<number> {
@@ -174,6 +228,13 @@ export class StudentsService {
     
     // Limitar a un máximo de 1.0
     return Math.min(riesgo, 1.0);
+  }
+
+  private getCurrentPeriod(): string {
+    const now = new Date();
+    const year = now.getFullYear();
+    const semester = now.getMonth() < 6 ? 'I' : 'II';
+    return `${year}-${semester}`;
   }
 
   async updateStudent(id: string, dtoStudent: UpdateStudent) {
