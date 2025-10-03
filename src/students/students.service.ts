@@ -2,8 +2,6 @@ import {
   Injectable, 
   NotFoundException, 
   ConflictException, 
-  Inject, 
-  forwardRef, 
   BadRequestException,
   InternalServerErrorException 
 } from '@nestjs/common';
@@ -11,18 +9,13 @@ import { PrismaService } from 'prisma/prisma.service';
 import { CreateStudentDto } from './dto/create-student.dto';
 import { UpdateStudent } from './dto/update-student.dto';
 import { CreateContextoEstudianteDto } from './dto/create-contexto-estudiante.dto';
-import { UserService } from 'src/user/user.service';
 import * as bcrypt from 'bcrypt';
-import { Rol, Etnia } from '@prisma/client';
+import { Rol } from '@prisma/client';
 import { CreateCompleteStudentDto } from './dto/create-complete-student.dto';
 
 @Injectable()
 export class StudentsService {
-  constructor(
-    private readonly prisma: PrismaService,
-    @Inject(forwardRef(() => UserService))
-    private readonly usuarioService: UserService,
-  ) {}
+  constructor(private readonly prisma: PrismaService) {}
 
   async createStudent(dtoStudent: CreateStudentDto) {
     // Verificar si la institución existe
