@@ -16,13 +16,15 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
+    "build:clean": "rm -rf dist && npm run build:prod",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "prisma:deploy": "npx prisma migrate deploy",
     "prisma:migrate": "npx prisma migrate deploy",
     "prisma:generate": "npx prisma generate",
     "prisma:reset": "npx prisma migrate reset --force",
-    "build:prod": "npx nest build && npm run prisma:migrate && npm run prisma:generate"
+    "build:prod": "npx nest build && npm run prisma:migrate && npm run prisma:generate",
+    "postinstall": "prisma generate"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",
