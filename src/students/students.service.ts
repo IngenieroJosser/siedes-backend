@@ -230,15 +230,16 @@ export class StudentsService {
     return `${year}-${semester}`;
   }
 
-  async updateStudent(id: string, dtoStudent: UpdateStudent) {
+  async updateStudent(id: string, dtoStudent: any) {
     const validateStudent = await this.prisma.estudiante.findUnique({
       where: { id },
+      include: { usuario: true }
     });
   
     if (!validateStudent) {
       throw new NotFoundException('El estudiante no existe');
     }
-
+  
     // Si se está actualizando la institución, verificar que exista
     if (dtoStudent.institucionId) {
       const validateInstitution = await this.prisma.institucion.findUnique({
@@ -250,6 +251,15 @@ export class StudentsService {
       }
     }
   
+    // Actualizar el usuario si se proporciona
+    if (dtoStudent.usuario) {
+      await this.prisma.usuario.update({
+        where: { id: validateStudent.usuarioId },
+        data: dtoStudent.usuario
+      });
+    }
+  
+    // Actualizar estudiante
     const updateStudent = await this.prisma.estudiante.update({
       where: { id },
       data: {

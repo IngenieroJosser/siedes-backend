@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Delete, Query } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Delete, Query, Put } from '@nestjs/common';
 import { CreateStudentDto } from './dto/create-student.dto';
 import { StudentsService } from './students.service';
 import { UpdateStudent } from './dto/update-student.dto';
@@ -56,7 +56,7 @@ export class StudentsController {
     return this.studentService.findStudentById(id);
   }
 
-  @Patch(':id')
+  @Put(':id')
   @ApiOperation({ summary: 'Actualizar un estudiante',description: 'Actualiza la información de un estudiante existente'})
   @ApiResponse({ status: 200, description: 'Estudiante actualizado correctamente', })
   @ApiResponse({ status: 404, description: 'Estudiante o institución no encontrada' })
