@@ -9,6 +9,7 @@ import { UpdateAlertaDesercionDto } from './dto/update-alerts.dto';
 import { FilterAlertsDto } from './dto/filter-alerts.dto';
 import { NivelRiesgo } from '@prisma/client';
 
+
 @Injectable()
 export class AlertsService {
   constructor(private readonly prisma: PrismaService) {}
@@ -107,6 +108,11 @@ export class AlertsService {
     } catch (error) {
       throw new InternalServerErrorException('Error al obtener las alertas');
     }
+  }
+
+  async findAllAlertsAvailable() {
+    const foundAlerts = await this.prisma.alertaDesercion.findMany();
+    return foundAlerts;
   }
 
   async findOne(id: string) {

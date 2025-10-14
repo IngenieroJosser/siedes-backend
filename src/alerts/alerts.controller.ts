@@ -18,7 +18,7 @@ import { UpdateAlertaDesercionDto } from './dto/update-alerts.dto';
 import { FilterAlertsDto } from './dto/filter-alerts.dto';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiQuery } from '@nestjs/swagger';
 
-ApiTags('Gestión de alertas ')
+ApiTags('Gestión de alertas')
 @Controller('alerts')
 export class AlertsController {
   constructor(private readonly alertsService: AlertsService) {}
@@ -54,6 +54,12 @@ export class AlertsController {
     return this.alertsService.getCriticalAlerts();
   }
 
+  @Get()
+  @ApiOperation({ summary: 'Obtener todas las alertas' })
+  getAllAlerts() {
+    return this.alertsService.findAllAlertsAvailable();
+  }
+
   @Get('student/:estudianteId')
   @ApiOperation({ summary: 'Obtener alertas por estudiante' })
   @ApiParam({ name: 'estudianteId', description: 'ID del estudiante' })
@@ -70,7 +76,7 @@ export class AlertsController {
     return this.alertsService.findOne(id);
   }
 
-  @Put(':id')
+  @Patch(':id')
   @ApiOperation({ summary: 'Actualizar una alerta' })
   @ApiParam({ name: 'id', description: 'ID de la alerta' })
   @ApiResponse({ status: 200, description: 'Alerta actualizada correctamente.' })
@@ -98,3 +104,4 @@ export class AlertsController {
     return this.alertsService.removeAlert(id);
   }
 }
+
