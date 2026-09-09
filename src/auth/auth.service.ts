@@ -10,6 +10,25 @@ import { Rol, Etnia } from '@prisma/client';
 export class AuthService {
   constructor(private prisma: PrismaService) {}
 
+  private normalizeEnumValue<T extends string>(
+    value: unknown,
+    enumValues: readonly T[],
+    fieldName: string,
+  ): T {
+    if (typeof value === 'number' && Number.isInteger(value)) {
+      const enumValue = enumValues[value];
+      if (enumValue) {
+        return enumValue;
+      }
+    }
+
+    if (typeof value === 'string' && enumValues.includes(value as T)) {
+      return value as T;
+    }
+
+    throw new BadRequestException(`El ${fieldName} debe ser un valor válido`);
+  }
+
   private async hashPassword(password: string): Promise<string> {
     try {
       // Configuración recomendada para Argon2
@@ -59,6 +78,7 @@ export class AuthService {
 
       // Hashear la contraseña con Argon2
       const hashedPassword = await this.hashPassword(registerDto.password);
+      const role = this.normalizeEnumValue(registerDto.rol, Object.values(Rol), 'rol');
 
       // Crear transacción para usuario y datos relacionados
       const result = await this.prisma.$transaction(async (tx) => {
@@ -71,14 +91,17 @@ export class AuthService {
             identificacion: registerDto.identificacion,
             telefono: registerDto.telefono,
             password: hashedPassword,
-            rol: registerDto.rol,
+            rol: role,
             activo: true,
           },
         });
 
         // Si es estudiante, crear registro en tabla Estudiante
-        if (registerDto.rol === Rol.ESTUDIANTE) {
+        if (role === Rol.ESTUDIANTE) {
           const studentDto = registerDto as RegisterStudentDto;
+          const ethnicity = studentDto.etnia === undefined
+            ? Etnia.NINGUNA
+            : this.normalizeEnumValue(studentDto.etnia, Object.values(Etnia), 'etnia');
           
           // Validar que la institución existe
           const institution = await tx.institucion.findUnique({
@@ -107,7 +130,7 @@ export class AuthService {
               usuarioId: user.id,
               edad: studentDto.edad,
               genero: studentDto.genero,
-              etnia: studentDto.etnia || Etnia.NINGUNA,
+              etnia: ethnicity,
               grado: studentDto.grado,
               institucionId: studentDto.institucionId,
               riesgoDesercion: 0.0,

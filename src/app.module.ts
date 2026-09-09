@@ -12,7 +12,16 @@ import { AlertsModule } from './alerts/alerts.module';
 import { InterventionsModule } from './interventions/interventions.module';
 
 @Module({
-  imports: [PrismaModule, PredictionModule, StudentsModule, UserModule, InstitutionModule, HelpModule, AuthModule, AlertsModule, InterventionsModule],
+  imports: [
+    PrismaModule, 
+    PredictionModule, 
+    StudentsModule, 
+    UserModule, InstitutionModule, 
+    HelpModule, 
+    AuthModule, 
+    AlertsModule, 
+    InterventionsModule
+  ],
   controllers: [AppController],
   providers: [AppService],
 })
