@@ -51,6 +51,8 @@ model Estudiante {
   intervenciones            Intervencion[]
   asignacionesBeneficios    AsignacionBeneficio[]  // Relación añadida
   solicitudesRapidas        SolicitudAyudaRapida[]
+  prediccionesRiesgo        PrediccionRiesgo[]
+  outcomes                  OutcomeEstudiantePeriodo[]
 
 }
 
@@ -173,6 +175,40 @@ model Intervencion {
   estudiante                Estudiante @relation(fields: [estudianteId], references: [id])
 }
 
+model PrediccionRiesgo {
+  id                        String   @id @default(cuid())
+  estudianteId              String
+  probability               Float
+  nivelRiesgo               NivelRiesgo
+  modelType                 String
+  modelVersion              String
+  institutionalPrior        Float?
+  factores                  Json?
+  warnings                  Json?
+  creadaEn                  DateTime @default(now())
+
+  estudiante                Estudiante @relation(fields: [estudianteId], references: [id], onDelete: Cascade)
+
+  @@index([estudianteId, creadaEn])
+  @@index([modelVersion])
+}
+
+model OutcomeEstudiantePeriodo {
+  id                        String   @id @default(cuid())
+  estudianteId              String
+  periodoObservacion        String
+  periodoResultado          String
+  estadoResultado           EstadoPermanencia
+  desertoSiguientePeriodo   Boolean
+  registradoEn              DateTime @default(now())
+  actualizadoEn             DateTime @updatedAt
+
+  estudiante                Estudiante @relation(fields: [estudianteId], references: [id], onDelete: Cascade)
+
+  @@unique([estudianteId, periodoObservacion, periodoResultado])
+  @@index([periodoResultado, desertoSiguientePeriodo])
+}
+
 model IndicadorEtnico {
   id                        String   @id @default(cuid())
   nombre                    String
@@ -219,6 +255,15 @@ enum Rol {
   ESTUDIANTE
   COORDINADOR
   LIDER_COMUNITARIO
+}
+
+enum EstadoPermanencia {
+  ACTIVO
+  PROMOVIDO
+  REPROBADO
+  TRANSFERIDO
+  GRADUADO
+  DESERTO
 }
 
 enum EstadoSolicitud {
