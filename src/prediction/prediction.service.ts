@@ -44,6 +44,20 @@ export class PredictionService {
 
   constructor(private readonly prisma: PrismaService) {}
 
+  async getStudentPredictionHistory(studentId: string) {
+    const student = await this.prisma.estudiante.findUnique({
+      where: { id: studentId },
+      select: { id: true, activo: true },
+    });
+
+    if (!student || !student.activo) {
+      throw new NotFoundException('El estudiante no existe o está inactivo');
+    }
+
+    // Las predicciones aún no se almacenan en una tabla histórica.
+    return [];
+  }
+
   async getAiHealth() {
     try {
       return await this.requestJson(`${this.aiBaseUrl}/health/ready`, {

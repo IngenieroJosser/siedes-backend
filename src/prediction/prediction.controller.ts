@@ -41,4 +41,11 @@ export class PredictionController {
     const shouldPersist = persist !== 'false';
     return this.predictionService.predictStudent(studentId, shouldPersist);
   }
+
+  @Get('students/:studentId/history')
+  @ApiOperation({ summary: 'Consultar el historial predictivo de un estudiante' })
+  @ApiParam({ name: 'studentId', type: String })
+  getStudentPredictionHistory(@Param('studentId') studentId: string) {
+    return this.predictionService.getStudentPredictionHistory(studentId);
+  }
 }
