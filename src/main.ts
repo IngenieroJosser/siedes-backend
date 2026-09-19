@@ -1,17 +1,33 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
+import { loadEnvFile } from 'node:process';
+
+// Carga .env en desarrollo local antes de instanciar los providers de NestJS.
+// En contenedores/producción las variables inyectadas por el entorno tienen prioridad.
+try {
+  loadEnvFile();
+} catch (error) {
+  const code = (error as NodeJS.ErrnoException)?.code;
+  if (code !== 'ENOENT') {
+    // No detenemos el arranque: la validación específica de cada integración
+    // reportará variables faltantes con mensajes más útiles.
+    console.warn('No fue posible cargar .env:', error);
+  }
+}
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
+  const corsOrigins = (process.env.CORS_ORIGINS ?? 'http://localhost:3000,https://siedes.vercel.app')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+
   app.enableCors({
-    origin: [
-      'http://localhost:3000',
-      'https://siedes.vercel.app',
-    ],
+    origin: corsOrigins,
     credentials: true,
-  });  
+  });
 
   const config = new DocumentBuilder()
     .setTitle('SIEDES API')

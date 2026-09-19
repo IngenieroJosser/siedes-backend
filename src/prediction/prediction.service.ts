@@ -1,68 +1,73 @@
 import {
   Injectable,
-  NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
-import { PrismaService } from 'prisma/prisma.service';
-import { StudentPredictionDto } from './dto/prediction-response.dto';
 
-interface AiStudentPayload {
-  student_id: string;
-  school_code?: string;
-  edad: number;
-  grado: string;
-  genero?: string;
-  etnia?: string;
-  academic?: {
-    promedio?: number;
-    inasistencias?: number;
-    materias_aprobadas?: number;
-    materias_reprobadas?: number;
-    comportamiento?: number;
-  };
-  context?: {
-    distancia_escuela?: number;
-    tiempo_desplazamiento?: number;
-    trabaja?: boolean;
-    horas_trabajo?: number;
-    ingresos_familiares?: number;
-    personas_hogar?: number;
-    apoyo_familiar?: boolean;
-    acceso_internet?: boolean;
-    dispositivo_electronico?: boolean;
-    participacion_comunitaria?: boolean;
-    conocimientos_ancestrales?: boolean;
-    situaciones_especiales?: string;
-    necesidades_especiales?: string;
-  };
+export interface AiHealthResponse {
+  status?: string;
+  ready?: boolean;
+  model_ready?: boolean;
+  predictions_ready?: boolean;
+  version?: string;
+  [key: string]: unknown;
+}
+
+export interface AiDashboardSummary {
+  anio: number;
+  instituciones: number;
+  riesgo: Record<'BAJO' | 'MEDIO' | 'ALTO', number>;
+  prob_alto_media: number;
+}
+
+export interface AiInstitutionRisk {
+  codigo_dane_establecimiento: string;
+  institucion_educativa: string;
+  zona_institucion?: string;
+  anio: number;
+  riesgo_predicho: 'BAJO' | 'MEDIO' | 'ALTO';
+  prob_bajo?: number;
+  prob_medio?: number;
+  prob_alto?: number;
+  [key: string]: unknown;
+}
+
+export interface AiInstitutionFactor {
+  anio: number;
+  codigo_dane_establecimiento: string;
+  institucion_educativa: string;
+  zona_institucion?: string;
+  rank: number;
+  feature: string;
+  shap_alto: number;
+  direccion: string;
+  abs_shap: number;
 }
 
 @Injectable()
 export class PredictionService {
-  private readonly aiBaseUrl = (process.env.AI_SERVICE_URL ?? 'http://localhost:8000').replace(/\/+$/, '');
-  private readonly timeoutMs = Number(process.env.AI_TIMEOUT_MS ?? 7000);
+  private readonly aiBaseUrl = (
+    process.env.AI_SERVICE_URL ?? 'http://localhost:8000'
+  ).replace(/\/+$/, '');
+  private readonly timeoutMs = Number(process.env.AI_TIMEOUT_MS ?? 10000);
+  private readonly aiApiKey = process.env.AI_API_KEY ?? '';
 
-  constructor(private readonly prisma: PrismaService) {}
-
-  async getStudentPredictionHistory(studentId: string) {
-    const student = await this.prisma.estudiante.findUnique({
-      where: { id: studentId },
-      select: { id: true, activo: true },
-    });
-
-    if (!student || !student.activo) {
-      throw new NotFoundException('El estudiante no existe o está inactivo');
-    }
-
-    // Las predicciones aún no se almacenan en una tabla histórica.
-    return [];
-  }
-
-  async getAiHealth() {
+  async getAiHealth(): Promise<AiHealthResponse> {
     try {
-      return await this.requestJson(`${this.aiBaseUrl}/health/ready`, {
-        method: 'GET',
-      });
+      const health = await this.requestJson<AiHealthResponse>(
+        `${this.aiBaseUrl}/health`,
+        { method: 'GET' },
+        false,
+      );
+
+      let ready = false;
+      try {
+        await this.requestJson(`${this.aiBaseUrl}/ready`, { method: 'GET' }, false);
+        ready = true;
+      } catch {
+        ready = false;
+      }
+
+      return { ...health, ready };
     } catch (error) {
       throw new ServiceUnavailableException(
         `SIEDES AI no está disponible: ${this.errorMessage(error)}`,
@@ -70,133 +75,70 @@ export class PredictionService {
     }
   }
 
-  async predictStudent(studentId: string, persist = true) {
-    const student = await this.prisma.estudiante.findUnique({
-      where: { id: studentId },
-      include: {
-        institucion: {
-          select: {
-            id: true,
-            nombre: true,
-            codigoDANE: true,
-          },
-        },
-        contexto: true,
-        registros: {
-          orderBy: { creadoEn: 'desc' },
-          take: 1,
-        },
-      },
-    });
+  async getModelInfo() {
+    return this.aiGet<Record<string, unknown>>('/model/info');
+  }
 
-    if (!student || !student.activo) {
-      throw new NotFoundException('El estudiante no existe o está inactivo');
-    }
+  async getDashboardSummary(): Promise<AiDashboardSummary> {
+    return this.aiGet<AiDashboardSummary>('/dashboard/summary');
+  }
 
-    const latestAcademic = student.registros[0];
-    const context = student.contexto;
+  async getInstitutions(): Promise<AiInstitutionRisk[]> {
+    return this.aiGet<AiInstitutionRisk[]>('/institutions');
+  }
 
-    const payload: AiStudentPayload = {
-      student_id: student.id,
-      ...(student.institucion.codigoDANE
-        ? { school_code: student.institucion.codigoDANE }
-        : {}),
-      edad: student.edad,
-      grado: student.grado,
-      genero: student.genero,
-      etnia: student.etnia,
-      ...(latestAcademic
-        ? {
-            academic: {
-              promedio: latestAcademic.promedio,
-              inasistencias: latestAcademic.inasistencias,
-              materias_aprobadas: latestAcademic.materiasAprobadas,
-              materias_reprobadas: latestAcademic.materiasReprobadas,
-              ...(latestAcademic.comportamiento !== null
-                ? { comportamiento: latestAcademic.comportamiento }
-                : {}),
-            },
-          }
-        : {}),
-      ...(context
-        ? {
-            context: {
-              distancia_escuela: context.distanciaEscuela,
-              tiempo_desplazamiento: context.tiempoDesplazamiento,
-              trabaja: context.trabaja,
-              ...(context.horasTrabajo !== null
-                ? { horas_trabajo: context.horasTrabajo }
-                : {}),
-              ...(context.ingresosFamiliares !== null
-                ? { ingresos_familiares: context.ingresosFamiliares }
-                : {}),
-              personas_hogar: context.personasHogar,
-              apoyo_familiar: context.apoyoFamiliar,
-              acceso_internet: context.accesoInternet,
-              dispositivo_electronico: context.dispositivoElectronico,
-              participacion_comunitaria: context.participacionComunitaria,
-              conocimientos_ancestrales: context.conocimientosAncestrales,
-              ...(context.situacionesEspeciales
-                ? { situaciones_especiales: context.situacionesEspeciales }
-                : {}),
-              ...(context.necesidadesEspeciales
-                ? { necesidades_especiales: context.necesidadesEspeciales }
-                : {}),
-            },
-          }
-        : {}),
-    };
+  async getInstitutionHistory(schoolCode: string): Promise<AiInstitutionRisk[]> {
+    return this.aiGet<AiInstitutionRisk[]>(
+      `/institutions/${encodeURIComponent(schoolCode)}/history`,
+    );
+  }
 
-    let prediction: StudentPredictionDto;
+  async getInstitutionFactors(
+    schoolCode: string,
+  ): Promise<AiInstitutionFactor[]> {
+    return this.aiGet<AiInstitutionFactor[]>(
+      `/institutions/${encodeURIComponent(schoolCode)}/factors`,
+    );
+  }
+
+  private async aiGet<T>(path: string): Promise<T> {
     try {
-      prediction = await this.requestJson<StudentPredictionDto>(
-        `${this.aiBaseUrl}/v1/predict/student`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        },
+      return await this.requestJson<T>(
+        `${this.aiBaseUrl}${path}`,
+        { method: 'GET' },
+        true,
       );
     } catch (error) {
       throw new ServiceUnavailableException(
-        `No fue posible obtener la predicción de SIEDES AI: ${this.errorMessage(error)}`,
+        `No fue posible consultar SIEDES AI (${path}): ${this.errorMessage(error)}`,
       );
     }
-
-    if (
-      typeof prediction.probability !== 'number' ||
-      prediction.probability < 0 ||
-      prediction.probability > 1
-    ) {
-      throw new ServiceUnavailableException(
-        'SIEDES AI devolvió una probabilidad inválida',
-      );
-    }
-
-    if (persist) {
-      await this.prisma.estudiante.update({
-        where: { id: student.id },
-        data: { riesgoDesercion: prediction.probability },
-      });
-    }
-
-    return {
-      studentId: student.id,
-      persisted: persist,
-      prediction,
-    };
   }
 
   private async requestJson<T = unknown>(
     url: string,
     init: RequestInit,
+    protectedRoute = true,
   ): Promise<T> {
+    if (protectedRoute && !this.aiApiKey) {
+      throw new Error(
+        'AI_API_KEY no configurada en el backend. No se exponen secretos al navegador.',
+      );
+    }
+
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
 
     try {
+      const headers = new Headers(init.headers ?? {});
+      headers.set('Accept', 'application/json');
+      if (protectedRoute) {
+        headers.set('X-API-Key', this.aiApiKey);
+      }
+
       const response = await fetch(url, {
         ...init,
+        headers,
         signal: controller.signal,
       });
 

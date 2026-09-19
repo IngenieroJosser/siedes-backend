@@ -9,10 +9,11 @@ import { CreateIntervencionDto } from './dto/create-interventions.dto';
 import { UpdateIntervencionDto } from './dto/update-interventions.dto';
 import { FilterIntervencionesDto } from './dto/filter-interventions.dto';
 import { TipoIntervencion, EstadoIntervencion } from '@prisma/client';
+import { MlEventService } from '../ml/ml-event.service';
 
 @Injectable()
 export class InterventionsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService, private readonly mlEvents: MlEventService) {}
 
   async create(createIntervencionDto: CreateIntervencionDto) {
     try {
@@ -26,20 +27,19 @@ export class InterventionsService {
         throw new NotFoundException('El estudiante no existe');
       }
 
-      const intervencion = await this.prisma.intervencion.create({
-        data: {
-          ...createIntervencionDto,
-          estado: createIntervencionDto.estado || EstadoIntervencion.ACTIVA,
-        },
-        include: {
-          estudiante: {
-            include: {
-              usuario: true,
-              institucion: true,
-              contexto: true
-            }
-          }
-        }
+      const intervencion = await this.prisma.$transaction(async (tx) => {
+        const created = await tx.intervencion.create({
+          data: { ...createIntervencionDto, estado: createIntervencionDto.estado || EstadoIntervencion.ACTIVA },
+          include: { estudiante: { include: { usuario: true, institucion: true, contexto: true } } }
+        });
+        await tx.mlOutboxEvent.create({
+          data: {
+            eventType: 'INTERVENTION_CREATED', aggregateType: 'Intervencion', aggregateId: created.id,
+            institutionId: created.estudiante.institucionId,
+            payload: { estudianteId: created.estudianteId, tipo: created.tipo, estado: created.estado },
+          },
+        });
+        return created;
       });
 
       return intervencion;

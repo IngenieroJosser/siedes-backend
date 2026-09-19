@@ -68,6 +68,7 @@ model Institucion {
   // Relaciones
   estudiantes               Estudiante[]
   solicitudesRapidas        SolicitudAyudaRapida[]
+  reportes                   ReporteInstitucional[]
 }
 
 model RegistroAcademico {
@@ -171,6 +172,48 @@ model Intervencion {
   creadoEn                  DateTime @default(now())
   
   estudiante                Estudiante @relation(fields: [estudianteId], references: [id])
+}
+
+
+model ReporteInstitucional {
+  id                        String   @id @default(cuid())
+  institucionId             String
+  anio                      Int
+  periodo                   String
+  fechaCorte                DateTime
+  matriculaCorte            Int
+  desertoresConfirmados     Int
+  tasaDesercion             Float
+  nivelRiesgoObservado      NivelRiesgo
+  finalizado                Boolean  @default(false)
+  fuente                    String   @default("OPERACIONAL")
+  observaciones             String?
+  creadoEn                  DateTime @default(now())
+  actualizadoEn             DateTime @updatedAt
+  finalizadoEn              DateTime?
+
+  institucion               Institucion @relation(fields: [institucionId], references: [id])
+
+  @@unique([institucionId, anio, periodo])
+  @@index([anio, periodo])
+}
+
+model MlOutboxEvent {
+  id                        String   @id @default(cuid())
+  eventType                 String
+  aggregateType             String
+  aggregateId               String
+  institutionId             String?
+  payload                   Json
+  status                    String   @default("PENDING")
+  attempts                  Int      @default(0)
+  nextAttemptAt             DateTime @default(now())
+  processedAt               DateTime?
+  lastError                 String?
+  createdAt                 DateTime @default(now())
+
+  @@index([status, nextAttemptAt])
+  @@index([institutionId, createdAt])
 }
 
 model IndicadorEtnico {

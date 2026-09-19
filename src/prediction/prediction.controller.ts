@@ -1,51 +1,67 @@
-import { Controller, Get, Param, Post, Query } from '@nestjs/common';
+import { Controller, Get, Param } from '@nestjs/common';
 import {
   ApiOperation,
   ApiParam,
-  ApiQuery,
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
 import { PredictionService } from './prediction.service';
-import { StudentPredictionResultDto } from './dto/prediction-response.dto';
 
-@ApiTags('Predicción de deserción')
+@ApiTags('Riesgo institucional SIEDES AI')
 @Controller('prediction')
 export class PredictionController {
   constructor(private readonly predictionService: PredictionService) {}
 
   @Get('health')
-  @ApiOperation({ summary: 'Consultar disponibilidad del microservicio SIEDES AI' })
+  @ApiOperation({
+    summary: 'Consultar disponibilidad del microservicio SIEDES AI',
+  })
   getAiHealth() {
     return this.predictionService.getAiHealth();
   }
 
-  @Post('students/:studentId')
+  @Get('model')
   @ApiOperation({
-    summary: 'Calcular riesgo de deserción de un estudiante',
-    description:
-      'Carga la información del estudiante desde PostgreSQL, consulta SIEDES AI y opcionalmente persiste la probabilidad en Estudiante.riesgoDesercion.',
+    summary: 'Consultar metadata del modelo institucional desplegado',
   })
-  @ApiParam({ name: 'studentId', type: String })
-  @ApiQuery({
-    name: 'persist',
-    required: false,
-    type: Boolean,
-    description: 'Si es false, devuelve la inferencia sin actualizar riesgoDesercion.',
-  })
-  @ApiResponse({ status: 200, type: StudentPredictionResultDto })
-  predictStudent(
-    @Param('studentId') studentId: string,
-    @Query('persist') persist?: string,
-  ) {
-    const shouldPersist = persist !== 'false';
-    return this.predictionService.predictStudent(studentId, shouldPersist);
+  getModelInfo() {
+    return this.predictionService.getModelInfo();
   }
 
-  @Get('students/:studentId/history')
-  @ApiOperation({ summary: 'Consultar el historial predictivo de un estudiante' })
-  @ApiParam({ name: 'studentId', type: String })
-  getStudentPredictionHistory(@Param('studentId') studentId: string) {
-    return this.predictionService.getStudentPredictionHistory(studentId);
+  @Get('dashboard')
+  @ApiOperation({
+    summary: 'Resumen del riesgo de deserción por institución educativa',
+  })
+  getDashboardSummary() {
+    return this.predictionService.getDashboardSummary();
+  }
+
+  @Get('institutions')
+  @ApiOperation({
+    summary: 'Listar riesgo predictivo del último corte por institución',
+    description:
+      'Devuelve exclusivamente resultados institucionales. SIEDES no expone predicción individual como producto del piloto.',
+  })
+  getInstitutions() {
+    return this.predictionService.getInstitutions();
+  }
+
+  @Get('institutions/:schoolCode/history')
+  @ApiOperation({
+    summary: 'Consultar histórico de riesgo de una institución educativa',
+  })
+  @ApiParam({ name: 'schoolCode', description: 'Código DANE del establecimiento' })
+  @ApiResponse({ status: 200, description: 'Serie histórica institucional' })
+  getInstitutionHistory(@Param('schoolCode') schoolCode: string) {
+    return this.predictionService.getInstitutionHistory(schoolCode);
+  }
+
+  @Get('institutions/:schoolCode/factors')
+  @ApiOperation({
+    summary: 'Consultar factores SHAP asociados al riesgo institucional',
+  })
+  @ApiParam({ name: 'schoolCode', description: 'Código DANE del establecimiento' })
+  getInstitutionFactors(@Param('schoolCode') schoolCode: string) {
+    return this.predictionService.getInstitutionFactors(schoolCode);
   }
 }

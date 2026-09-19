@@ -96,3 +96,7 @@ Nest is an MIT-licensed open source project. It can grow thanks to the sponsors 
 ## License
 
 Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+
+## Aprendizaje continuo SIEDES
+
+Esta versión incluye Outbox transaccional, reportes institucionales etiquetados y sincronización segura con SIEDES AI. Consulta `CONTINUAL_LEARNING.md` antes de ejecutar migraciones.

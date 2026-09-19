@@ -10,17 +10,21 @@ import { HelpModule } from './help/help.module';
 import { AuthModule } from './auth/auth.module';
 import { AlertsModule } from './alerts/alerts.module';
 import { InterventionsModule } from './interventions/interventions.module';
+import { MlModule } from './ml/ml.module';
+import { ReportsModule } from './reports/reports.module';
 
 @Module({
   imports: [
-    PrismaModule, 
+    PrismaModule,
+    MlModule, 
     PredictionModule, 
     StudentsModule, 
     UserModule, InstitutionModule, 
     HelpModule, 
     AuthModule, 
     AlertsModule, 
-    InterventionsModule
+    InterventionsModule,
+    ReportsModule
   ],
   controllers: [AppController],
   providers: [AppService],

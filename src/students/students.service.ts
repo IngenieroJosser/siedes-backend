@@ -12,10 +12,11 @@ import { CreateContextoEstudianteDto } from './dto/create-contexto-estudiante.dt
 import * as bcrypt from 'bcrypt';
 import { Rol } from '@prisma/client';
 import { CreateCompleteStudentDto } from './dto/create-complete-student.dto';
+import { MlEventService } from '../ml/ml-event.service';
 
 @Injectable()
 export class StudentsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService, private readonly mlEvents: MlEventService) {}
 
   async createStudent(dtoStudent: CreateStudentDto) {
     // Verificar si la institución existe
@@ -27,19 +28,29 @@ export class StudentsService {
       throw new NotFoundException('La institución no existe');
     }
   
-    const createStudent = await this.prisma.estudiante.create({
-      data: {
-        usuarioId: dtoStudent.usuarioId,
-        institucionId: dtoStudent.institucionId,
-        edad: dtoStudent.edad,
-        genero: dtoStudent.genero,
-        etnia: dtoStudent.etnia,
-        grado: dtoStudent.grado,
-        riesgoDesercion: dtoStudent.riesgoDesercion || 0.0,
-      },
+    return this.prisma.$transaction(async (tx) => {
+      const createStudent = await tx.estudiante.create({
+        data: {
+          usuarioId: dtoStudent.usuarioId,
+          institucionId: dtoStudent.institucionId,
+          edad: dtoStudent.edad,
+          genero: dtoStudent.genero,
+          etnia: dtoStudent.etnia,
+          grado: dtoStudent.grado,
+          riesgoDesercion: dtoStudent.riesgoDesercion || 0.0,
+        },
+      });
+      await tx.mlOutboxEvent.create({
+        data: {
+          eventType: 'STUDENT_CREATED',
+          aggregateType: 'Estudiante',
+          aggregateId: createStudent.id,
+          institutionId: createStudent.institucionId,
+          payload: { grado: createStudent.grado, edad: createStudent.edad },
+        },
+      });
+      return createStudent;
     });
-  
-    return createStudent;
   }
 
   async createCompleteStudent(createCompleteStudentDto: CreateCompleteStudentDto) {
@@ -180,6 +191,16 @@ export class StudentsService {
             observaciones: 'Registro académico inicial creado automáticamente',
           },
         });
+
+        await prisma.mlOutboxEvent.create({
+          data: {
+            eventType: 'STUDENT_CREATED',
+            aggregateType: 'Estudiante',
+            aggregateId: newStudent.id,
+            institutionId: newStudent.institucionId,
+            payload: { grado: newStudent.grado, edad: newStudent.edad, contextoCompleto: true },
+          },
+        });
   
         return {
           message: 'Estudiante creado exitosamente',
@@ -272,6 +293,13 @@ export class StudentsService {
       },
     });
   
+    await this.mlEvents.enqueue({
+      eventType: 'STUDENT_UPDATED',
+      aggregateType: 'Estudiante',
+      aggregateId: updateStudent.id,
+      institutionId: updateStudent.institucionId,
+      payload: { grado: updateStudent.grado, edad: updateStudent.edad },
+    });
     return updateStudent;
   }
 
@@ -289,21 +317,18 @@ export class StudentsService {
       where: { estudianteId },
     });
 
-    if (existingContext) {
-      // Actualizar contexto existente
-      return this.prisma.contextoEstudiante.update({
-        where: { estudianteId },
-        data: contextoData,
-      });
-    } else {
-      // Crear nuevo contexto
-      return this.prisma.contextoEstudiante.create({
-        data: {
-          estudianteId,
-          ...contextoData,
-        },
-      });
-    }
+    const context = existingContext
+      ? await this.prisma.contextoEstudiante.update({ where: { estudianteId }, data: contextoData })
+      : await this.prisma.contextoEstudiante.create({ data: { estudianteId, ...contextoData } });
+
+    await this.mlEvents.enqueue({
+      eventType: 'STUDENT_CONTEXT_UPDATED',
+      aggregateType: 'ContextoEstudiante',
+      aggregateId: context.id,
+      institutionId: validateStudent.institucionId,
+      payload: { estudianteId },
+    });
+    return context;
   }
 
   async findAllStudents() {

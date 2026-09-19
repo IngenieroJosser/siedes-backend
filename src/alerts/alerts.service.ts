@@ -8,11 +8,12 @@ import { CreateAlertaDesercionDto } from './dto/create-alerts.dto';
 import { UpdateAlertaDesercionDto } from './dto/update-alerts.dto';
 import { FilterAlertsDto } from './dto/filter-alerts.dto';
 import { NivelRiesgo } from '@prisma/client';
+import { MlEventService } from '../ml/ml-event.service';
 
 
 @Injectable()
 export class AlertsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService, private readonly mlEvents: MlEventService) {}
 
   async createAlert(createAlertDto: CreateAlertaDesercionDto) {
     try {
@@ -25,22 +26,23 @@ export class AlertsService {
         throw new NotFoundException('El estudiante no existe');
       }
 
-      const alerta = await this.prisma.alertaDesercion.create({
-        data: {
-          ...createAlertDto,
-          revisada: createAlertDto.revisada || false,
-          fechaRevision: createAlertDto.revisada && createAlertDto.fechaRevision ? new Date(createAlertDto.fechaRevision) : null,
-
-        },
-        include: {
-          estudiante: {
-            include: {
-              usuario: true,
-              institucion: true,
-              contexto: true
-            }
-          }
-        }
+      const alerta = await this.prisma.$transaction(async (tx) => {
+        const created = await tx.alertaDesercion.create({
+          data: {
+            ...createAlertDto,
+            revisada: createAlertDto.revisada || false,
+            fechaRevision: createAlertDto.revisada && createAlertDto.fechaRevision ? new Date(createAlertDto.fechaRevision) : null,
+          },
+          include: { estudiante: { include: { usuario: true, institucion: true, contexto: true } } }
+        });
+        await tx.mlOutboxEvent.create({
+          data: {
+            eventType: 'ALERT_CREATED', aggregateType: 'AlertaDesercion', aggregateId: created.id,
+            institutionId: created.estudiante.institucionId,
+            payload: { estudianteId: created.estudianteId, nivelRiesgo: created.nivelRiesgo, revisada: created.revisada },
+          },
+        });
+        return created;
       });
 
       return alerta;
